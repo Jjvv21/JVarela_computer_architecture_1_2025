@@ -1,6 +1,9 @@
 import tkinter as tk
 from PIL import Image, ImageTk
 from tkinter import filedialog
+import subprocess
+import numpy as np
+import os
 
 # Configuración de la ventana principal
 root = tk.Tk()
@@ -74,16 +77,94 @@ def process_patch():
             unprocessed_canvas.delete("all")
             unprocessed_canvas.create_image(1, 0, anchor=tk.NW, image=unprocessed_photo)
 
-            #genera un archivo .txt con los valores de cada pixel en un solo canal ya que la imagen es generada en escala de grises
-            
-            with open(f"patch_{patch_num}_input.txt", "w") as f:
+       
+            current_dir = os.getcwd()
+            # Generar el archivo input.txt en el directorio actual
+            input_path = os.path.join(current_dir, "input.txt")
+            with open(input_path, "w") as f:
                 for y in range(patch.height):  # 97 filas
                     row_values = [str(patch.getpixel((x, y))) for x in range(patch.width)]  # 97 columnas
                     f.write(" ".join(row_values) + "\n")
 
+            # Mostrar mensaje inicial en el canvas
             processed_canvas.delete("all")
-            processed_canvas.create_text(IMG_SIZE // 2, IMG_SIZE // 2, text=f"Procesado: Recuadro {patch_num}", 
+            processed_canvas.create_text(IMG_SIZE // 2, IMG_SIZE // 2, 
+                                         text=f"Ejecutando en: {current_dir}", 
                                          fill="white", font=("Helvetica", 12))
+            root.update()
+
+            # Ejecutar los comandos make y luego ./test
+            try:
+                # Compilar el código ensamblador con make
+                result = subprocess.run(["make"], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+                
+                
+                if result.returncode != 0:
+                    processed_canvas.delete("all")
+                    processed_canvas.create_text(IMG_SIZE // 2, IMG_SIZE // 2, 
+                                                 text="Error al compilar con make:\n" + result.stderr, 
+                                                 fill="white", font=("Helvetica", 12))
+                    return
+
+                # Verificar si el ejecutable 'test' existe después de make
+                test_path = os.path.join(current_dir, "test")
+                if not os.path.exists(test_path):
+                    processed_canvas.delete("all")
+                    processed_canvas.create_text(IMG_SIZE // 2, IMG_SIZE // 2, 
+                                                 text="make ejecutado, pero no se encontró 'test'", 
+                                                 fill="white", font=("Helvetica", 12))
+               
+    
+                # Si output.txt ya existe, eliminarlo para evitar confusión
+                output_path = os.path.join(current_dir, "output.txt")
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                   
+
+                # Ejecutar el programa ensamblador directamente
+                result = subprocess.run([test_path], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+               
+                
+                if result.returncode != 0:
+                    processed_canvas.delete("all")
+                    processed_canvas.create_text(IMG_SIZE // 2, IMG_SIZE // 2, 
+                                                 text="Error al ejecutar ./test:\n" + result.stderr, 
+                                                 fill="white", font=("Helvetica", 12))
+                   
+
+                # Verificar si output.txt existe después de ejecutar ./test
+                if not os.path.exists(output_path):
+                    processed_canvas.delete("all")
+                    processed_canvas.create_text(IMG_SIZE // 2, IMG_SIZE // 2, 
+                                                 text="./test ejecutado, pero no se generó output.txt", 
+                                                 fill="white", font=("Helvetica", 12))
+                 
+                # Leer el archivo output.txt generado por el ensamblador (388x388)
+                with open(output_path, "r") as f:
+                    lines = f.readlines()
+                    if len(lines) != 388 or any(len(line.split()) != 388 for line in lines):
+                        processed_canvas.delete("all")
+                        processed_canvas.create_text(IMG_SIZE // 2, IMG_SIZE // 2, text="Formato inválido en output.txt", 
+                                                     fill="white", font=("Helvetica", 12))
+                        return
+                    # Convertir los valores a una matriz numpy
+                    processed_data = np.array([[int(val) for val in line.split()] for line in lines], dtype=np.uint8)
+                
+                # Crear una imagen desde los datos procesados
+                processed_img = Image.fromarray(processed_data, mode="L")  # "L" para escala de grises
+                processed_img_resized = processed_img.resize((IMG_SIZE, IMG_SIZE))  # Redimensionar para mostrar
+                processed_photo = ImageTk.PhotoImage(processed_img_resized)
+                
+                # Mostrar la imagen procesada en el canvas
+                processed_canvas.delete("all")
+                processed_canvas.create_image(1, 0, anchor=tk.NW, image=processed_photo)
+                processed_canvas.image = processed_photo  # Guardar referencia para evitar que se borre
+            except FileNotFoundError:
+                processed_canvas.delete("all")
+                processed_canvas.create_text(IMG_SIZE // 2, IMG_SIZE // 2, text="Comando 'make' no encontrado", 
+                                             fill="white", font=("Helvetica", 12))
+                return
+
             update_scroll_region()  # Actualizar región de scroll después de procesar
         else:
             unprocessed_canvas.delete("all")
