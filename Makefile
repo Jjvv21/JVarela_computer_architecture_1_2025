@@ -9,8 +9,9 @@ $(PROGRAM): $(PROGRAM).o
 $(PROGRAM).o: $(PROGRAM).asm
 	nasm -f elf32 $(PROGRAM).asm -o $(PROGRAM).o
 
-run:
+run: 
 	./$(PROGRAM)
 
 clean:
 	rm -f $(PROGRAM) $(PROGRAM).o
+

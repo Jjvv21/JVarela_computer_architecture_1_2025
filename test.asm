@@ -4,56 +4,56 @@ GLOBAL _start
 SECTION .data
     filename_in  db "input.txt", 0
     filename_out db "output.txt", 0
-    file_mode_in  dd 0          ; O_RDONLY
-    file_mode_out dd 0x241      ; O_WRONLY | O_CREAT | O_TRUNC
+    file_mode_in  dd 0          ; Modo lectura (O_RDONLY)
+    file_mode_out dd 0x241      ; Modo escritura (O_WRONLY | O_CREAT | O_TRUNC)
     scale         dd 4.0        ; Factor de escala
-    width         dd 97         ; Ancho original
-    height        dd 97         ; Alto original
-    new_width     dd 388        ; Nuevo ancho (97 * 4)
-    new_height    dd 388        ; Nuevo alto (97 * 4)
-    newline       db 10
-    space         db 32
+    width         dd 100        ; Ancho original
+    height        dd 100        ; Alto original
+    new_width     dd 400        ; Nuevo ancho (100 * 4)
+    new_height    dd 400        ; Nuevo alto (100 * 4)
+    newline       db 10         ; Salto de línea
+    space         db 32         ; Espacio
 
 SECTION .bss
     buffer_in     resb 65536    ; Buffer para leer input.txt (64 KB)
     bytes_read    resd 1        ; Cantidad de bytes leídos
-    image_orig    resb 9409     ; 97x97 = 9409 bytes
-    image_scaled  resb 150544   ; 388x388 = 150544 bytes
-    fd_in         resd 1
-    fd_out        resd 1
-    x_float       resd 1
-    y_float       resd 1
-    x0            resd 1
-    y0            resd 1
-    x1            resd 1
-    y1            resd 1
-    disx          resd 1
-    disy          resd 1
-    p00           resb 1
-    p10           resb 1
-    p01           resb 1
-    p11           resb 1
-    result        resd 1
-    temp          resd 1
-    temp2         resd 1
-    term1         resd 1
-    term2         resd 1
-    term3         resd 1
-    term4         resd 1
-    temp_int      resd 1        ; Temporal para fild
-    temp_counter  resd 1        ; Temporal para contadores
+    image_orig    resb 10000    ; Imagen original: 100x100 = 10000 bytes
+    image_scaled  resb 160000   ; Imagen escalada: 400x400 = 160000 bytes
+    fd_in         resd 1        ; Descriptor de archivo de entrada
+    fd_out        resd 1        ; Descriptor de archivo de salida
+    x_float       resd 1        ; Coordenada x flotante
+    y_float       resd 1        ; Coordenada y flotante
+    x0            resd 1        ; x0 entero
+    y0            resd 1        ; y0 entero
+    x1            resd 1        ; x1 entero
+    y1            resd 1        ; y1 entero
+    disx          resd 1        ; Distancia fraccional en x
+    disy          resd 1        ; Distancia fraccional en y
+    p00           resb 1        ; Píxel en (x0, y0)
+    p10           resb 1        ; Píxel en (x1, y0)
+    p01           resb 1        ; Píxel en (x0, y1)
+    p11           resb 1        ; Píxel en (x1, y1)
+    result        resd 1        ; Resultado de interpolación
+    temp          resd 1        ; Temporal para cálculos
+    temp2         resd 1        ; Segundo temporal
+    term1         resd 1        ; Término 1 de interpolación
+    term2         resd 1        ; Término 2
+    term3         resd 1        ; Término 3
+    term4         resd 1        ; Término 4
+    temp_int      resd 1        ; Temporal para conversión a entero
+    temp_counter  resd 1        ; Contador temporal
     num_str       resb 4        ; Buffer para conversión a string
 
 SECTION .text
 _start:
     ; Inicializar image_orig con ceros
     mov edi, image_orig
-    mov ecx, 9409               ; 97*97
+    mov ecx, 10000              ; Tamaño de la imagen original (100*100)
     xor eax, eax
     rep stosb
 
     ; Abrir input.txt
-    mov eax, 5
+    mov eax, 5                  ; Syscall: open
     mov ebx, filename_in
     mov ecx, [file_mode_in]
     int 0x80
@@ -62,7 +62,7 @@ _start:
     jl error_exit_input_open
 
     ; Leer archivo
-    mov eax, 3
+    mov eax, 3                  ; Syscall: read
     mov ebx, [fd_in]
     mov ecx, buffer_in
     mov edx, 65536              ; Tamaño del buffer
@@ -71,60 +71,54 @@ _start:
     cmp eax, 0
     jle error_exit_input_read
 
-    ; Parsear buffer_in y llenar image_orig
-    call parse_input
+    call parse_input            ; Parsear input.txt
 
     ; Cerrar input.txt
-    mov eax, 6
+    mov eax, 6                  ; Syscall: close
     mov ebx, [fd_in]
     int 0x80
 
-    ; Aplicar interpolación bilineal
-    call bilinear_interpolation
+    call bilinear_interpolation ; Aplicar interpolación bilineal
 
     ; Abrir output.txt
-    mov eax, 5
+    mov eax, 5                  ; Syscall: open
     mov ebx, filename_out
     mov ecx, [file_mode_out]
-    mov edx, 0o644
+    mov edx, 0o644              ; Permisos 644
     int 0x80
     mov [fd_out], eax
     cmp eax, 0
     jl error_exit_output_open
 
-    ; Escribir image_scaled en output.txt
-    call write_output
+    call write_output           ; Escribir resultado en output.txt
 
     ; Cerrar output.txt
-    mov eax, 6
+    mov eax, 6                  ; Syscall: close
     mov ebx, [fd_out]
     int 0x80
 
-    ; Salir normalmente
-    mov eax, 1
-    xor ebx, ebx
+    ; Salir
+    mov eax, 1                  ; Syscall: exit
+    xor ebx, ebx                ; Código de salida 0
     int 0x80
 
+; Manejo de errores
 error_exit_input_open:
     mov eax, 1
     mov ebx, 1
     int 0x80
-
 error_exit_input_read:
     mov eax, 1
     mov ebx, 2
     int 0x80
-
 error_exit_output_open:
     mov eax, 1
     mov ebx, 3
     int 0x80
-
 error_exit_parse:
     mov eax, 1
     mov ebx, 4
     int 0x80
-
 error_exit_index:
     mov eax, 1
     mov ebx, 5
@@ -137,23 +131,23 @@ parse_input:
     mov edi, buffer_in          ; Puntero al buffer
     xor ecx, ecx                ; Contador de bytes procesados
 parse_loop:
-    cmp esi, 9409               ; 97*97
+    cmp esi, 10000              ; Límite de la imagen original (100*100)
     jge parse_done
     cmp ecx, [bytes_read]
     jge parse_done
 
     movzx eax, byte [edi]
-    cmp eax, 32
+    cmp eax, 32                 ; Espacio
     je skip_space_or_newline
-    cmp eax, 10
+    cmp eax, 10                 ; Nueva línea
     je skip_space_or_newline
-    cmp eax, 0
+    cmp eax, 0                  ; Fin de buffer
     je parse_done
 
     push ecx
-    call parse_number
+    call parse_number           ; Convertir texto a número
     pop ecx
-    cmp ebx, 255
+    cmp ebx, 255                ; Validar rango de píxel (0-255)
     ja skip_invalid
     mov [image_orig + esi], bl
     inc esi
@@ -182,10 +176,10 @@ parse_done:
     popa
     ret
 
-; Subrutina para parsear un número
+; Subrutina para parsear un número desde texto
 parse_number:
-    xor ebx, ebx
-    xor edx, edx
+    xor ebx, ebx                ; Acumulador del número
+    xor edx, edx                ; Contador de dígitos
 parse_num_loop:
     cmp ecx, [bytes_read]
     jge parse_num_end
@@ -206,7 +200,7 @@ parse_num_loop:
     inc edi
     inc ecx
     inc edx
-    cmp edx, 3
+    cmp edx, 3                  ; Máximo 3 dígitos
     jge parse_num_end
     jmp parse_num_loop
 parse_num_end:
@@ -217,16 +211,17 @@ parse_num_end:
 ; Subrutina para interpolación bilineal
 bilinear_interpolation:
     pusha
-    xor esi, esi
+    xor esi, esi                ; Contador de filas
 outer_loop:
-    cmp esi, [new_height]       ; 388
+    cmp esi, [new_height]       ; Hasta 400
     jge end_outer
     
-    xor edi, edi
+    xor edi, edi                ; Contador de columnas
 inner_loop:
-    cmp edi, [new_width]        ; 388
+    cmp edi, [new_width]        ; Hasta 400
     jge end_inner
 
+    ; Calcular coordenadas originales (x_float, y_float)
     mov [temp_counter], esi
     fild dword [temp_counter]
     fdiv dword [scale]
@@ -237,12 +232,13 @@ inner_loop:
     fdiv dword [scale]
     fstp dword [y_float]
 
+    ; Obtener partes enteras (x0, y0)
     fld dword [x_float]
     fisttp dword [x0]
-
     fld dword [y_float]
     fisttp dword [y0]
 
+    ; Calcular x1 (clamp al borde)
     mov eax, [x0]
     inc eax
     cmp eax, [height]
@@ -252,6 +248,7 @@ inner_loop:
 no_clamp_x:
     mov [x1], eax
 
+    ; Calcular y1 (clamp al borde)
     mov eax, [y0]
     inc eax
     cmp eax, [width]
@@ -261,19 +258,20 @@ no_clamp_x:
 no_clamp_y:
     mov [y1], eax
 
+    ; Calcular distancias fraccionales
     fld dword [x_float]
     fisub dword [x0]
     fstp dword [disx]
-
     fld dword [y_float]
     fisub dword [y0]
     fstp dword [disy]
 
+    ; Obtener valores de los 4 píxeles vecinos
     mov eax, [x0]
     mov ebx, [width]
     mul ebx
     add eax, [y0]
-    cmp eax, 9409               ; 97*97
+    cmp eax, 10000              ; Límite de image_orig
     jae error_exit_index
     movzx ebx, byte [image_orig + eax]
     mov [p00], bl
@@ -282,7 +280,7 @@ no_clamp_y:
     mov ebx, [width]
     mul ebx
     add eax, [y0]
-    cmp eax, 9409
+    cmp eax, 10000
     jae error_exit_index
     movzx ebx, byte [image_orig + eax]
     mov [p10], bl
@@ -291,7 +289,7 @@ no_clamp_y:
     mov ebx, [width]
     mul ebx
     add eax, [y1]
-    cmp eax, 9409
+    cmp eax, 10000
     jae error_exit_index
     movzx ebx, byte [image_orig + eax]
     mov [p01], bl
@@ -300,15 +298,15 @@ no_clamp_y:
     mov ebx, [width]
     mul ebx
     add eax, [y1]
-    cmp eax, 9409
+    cmp eax, 10000
     jae error_exit_index
     movzx ebx, byte [image_orig + eax]
     mov [p11], bl
 
+    ; Calcular términos de interpolación
     fld1
     fsub dword [disx]
     fstp dword [temp]
-
     fld1
     fsub dword [disy]
     fstp dword [temp2]
@@ -341,17 +339,19 @@ no_clamp_y:
     fmul dword [disy]
     fstp dword [term4]
 
+    ; Sumar términos y obtener resultado
     fld dword [term1]
     fadd dword [term2]
     fadd dword [term3]
     fadd dword [term4]
     fistp dword [result]
 
+    ; Guardar píxel en image_scaled
     mov eax, esi
     mov ebx, [new_width]
     mul ebx
     add eax, edi
-    cmp eax, 150544             ; 388*388
+    cmp eax, 160000             ; Límite de image_scaled
     jae error_exit_index
     mov bl, [result]
     mov [image_scaled + eax], bl
@@ -372,30 +372,33 @@ write_output:
     pusha
     xor esi, esi
 write_outer:
-    cmp esi, [new_height]       ; 388
+    cmp esi, [new_height]       ; Hasta 400
     jge write_done
 
     xor edi, edi
 write_inner:
-    cmp edi, [new_width]        ; 388
+    cmp edi, [new_width]        ; Hasta 400
     jge write_end_inner
 
+    ; Obtener píxel de image_scaled
     mov eax, esi
     mov ebx, [new_width]
     mul ebx
     add eax, edi
-    cmp eax, 150544             ; 388*388
+    cmp eax, 160000             ; Límite de image_scaled
     jae error_exit_index
     movzx eax, byte [image_scaled + eax]
     call int_to_string
 
-    mov eax, 4
+    ; Escribir número
+    mov eax, 4                  ; Syscall: write
     mov ebx, [fd_out]
     mov ecx, num_str
     mov edx, 4
     int 0x80
 
-    cmp edi, 387                ; Última columna (388-1)
+    ; Agregar espacio si no es la última columna
+    cmp edi, 399                ; Última columna (400-1)
     je no_space
     mov eax, 4
     mov ebx, [fd_out]
@@ -407,6 +410,7 @@ no_space:
     jmp write_inner
 
 write_end_inner:
+    ; Escribir salto de línea
     mov eax, 4
     mov ebx, [fd_out]
     mov ecx, newline
@@ -424,12 +428,12 @@ write_done:
 int_to_string:
     pusha
     mov edi, num_str + 3
-    mov byte [edi], 32
-    mov ecx, 10
-    mov ebx, eax
+    mov byte [edi], 32          ; Rellenar con espacio por defecto
+    mov ecx, 10                 ; Base 10
+    mov ebx, eax                ; Valor a convertir
     test ebx, ebx
     jnz convert_loop
-    mov byte [edi-1], '0'
+    mov byte [edi-1], '0'       ; Caso especial: 0
     jmp convert_end
 
 convert_loop:
@@ -445,6 +449,7 @@ convert_loop:
     jmp convert_loop
 
 convert_end:
+    ; Rellenar con espacios si es necesario
     mov ecx, num_str
     cmp edi, ecx
     jg fill_spaces
