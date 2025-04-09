@@ -60,6 +60,10 @@ python3 interfaz.py
 ###  Verificar el archivo de salida con awk:
 ```bash
 awk 'END {print NR}' pixeles.txt
+```
+
+![Imagen del programa cuando se carga un archivo](https://github.com/Jjvv21/JVarela_computer_architecture_1_2025/blob/Development/ImagenesTest/CargarImagen.PNG)
+![Imagen del programa cuando se procesa un cuadrante](https://github.com/Jjvv21/JVarela_computer_architecture_1_2025/blob/Development/ImagenesTest/ImagenProcesada.PNG)
 
 
 
